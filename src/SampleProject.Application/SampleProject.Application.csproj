@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>disable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\SampleProject.Core\SampleProject.Core.csproj" />
+      <ProjectReference Include="..\SampleProject.DataAccess\SampleProject.DataAccess.csproj" />
+      <ProjectReference Include="..\SampleProject.Infrastructure\SampleProject.Infrastructure.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+      <PackageReference Include="Riok.Mapperly" Version="4.2.1" />
+    </ItemGroup>
+
+</Project>
