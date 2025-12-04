@@ -123,7 +123,7 @@ public sealed class AuthService : IAuthService
             _httpContextAccessor.HttpContext!.Response.Cookies.Append(
                 "accessToken",
                 jwtObject.Token,
-                GetCookieOptions(jwtObject.ExpiresOn));
+                GetCookieOptions(jwtObject.ExpiresAtUtc));
             
             _httpContextAccessor.HttpContext.Response.Cookies.Append(
                 "refreshToken",
@@ -184,7 +184,7 @@ public sealed class AuthService : IAuthService
     
     public async Task DeactivateCookieRefreshToken()
     {
-        var cookieRefreshToken = _httpContextAccessor.HttpContext.Request.Cookies["refreshToken"];
+        var cookieRefreshToken = _httpContextAccessor.HttpContext?.Request.Cookies["refreshToken"];
         
         if (string.IsNullOrEmpty(cookieRefreshToken))
         {
@@ -315,7 +315,7 @@ public sealed class AuthService : IAuthService
         _httpContextAccessor.HttpContext.Response.Cookies.Append(
             "accessToken",
             jwtObject.Token,
-            GetCookieOptions(jwtObject.ExpiresOn));
+            GetCookieOptions(jwtObject.ExpiresAtUtc));
         
         _httpContextAccessor.HttpContext.Response.Cookies.Append(
             "refreshToken",
@@ -486,7 +486,7 @@ public sealed class AuthService : IAuthService
             AccessToken = new AccessTokenModel
             {
                 Token = jwtToken.Token,
-                ExpiresAtUtc = jwtToken.ExpiresOn,
+                ExpiresAtUtc = jwtToken.ExpiresAtUtc,
             }
         };
     }
