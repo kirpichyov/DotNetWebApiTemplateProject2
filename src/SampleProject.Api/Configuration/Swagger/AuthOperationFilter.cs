@@ -1,8 +1,8 @@
 ﻿using System.Net;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.OpenApi.Any;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using SampleProject.Api.Constants;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
@@ -33,28 +33,28 @@ internal sealed class AuthOperationFilter : IOperationFilter
 			return;
 		}
 		
-		var securityRequirement = new OpenApiSecurityRequirement();
-
 		var id = apiExplorerAttribute?.GroupName switch
 		{
 			EndpointConstants.DefaultGroupName => "Bearer",
 			_ => "Bearer"
 		};
 		
-		securityRequirement.Add(
-			new OpenApiSecurityScheme
+		var securityRequirement = new OpenApiSecurityRequirement
+		{
 			{
-				Reference = new OpenApiReference {Type = ReferenceType.SecurityScheme, Id = id},
-			}, Array.Empty<string>());
+				new OpenApiSecuritySchemeReference(id, context.Document),
+				new List<string>()
+			}
+		};
 
-		operation.Security = new[] {securityRequirement};
+		operation.Security = new[] { securityRequirement };
 
-		operation.Responses.TryAdd(
+		operation.Responses?.TryAdd(
 			((int)HttpStatusCode.Unauthorized).ToString(),
 			GetEmptyJsonResponse(nameof(HttpStatusCode.Unauthorized))
 		);
 
-		operation.Responses.TryAdd(
+		operation.Responses?.TryAdd(
 			((int)HttpStatusCode.Forbidden).ToString(),
 			GetEmptyJsonResponse(nameof(HttpStatusCode.Forbidden))
 		);
@@ -68,7 +68,7 @@ internal sealed class AuthOperationFilter : IOperationFilter
 			{
 				{
 					"application/json",
-					new OpenApiMediaType {Schema = new OpenApiSchema {Default = new OpenApiString("{}")}}
+					new OpenApiMediaType {Schema = new OpenApiSchema {Default = JsonNode.Parse("{}")}}
 				}
 			},
 			Description = description

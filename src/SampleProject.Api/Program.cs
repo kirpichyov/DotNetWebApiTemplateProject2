@@ -8,15 +8,13 @@ using Kirpichyov.FriendlyJwt.DependencyInjection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.JsonWebTokens;
-using Microsoft.Net.Http.Headers;
-using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi;
 using SampleProject.Api.Configuration.Swagger;
-using SampleProject.Api.Constants;
 using SampleProject.Api.Endpoints.Internal;
 using SampleProject.Api.Middleware;
-using SampleProject.Api.OpenApi;
 using SampleProject.Api.Security;
 using SampleProject.Application;
 using SampleProject.Application.Security;
@@ -83,15 +81,15 @@ if (!builder.Environment.IsProduction())
         options.AddSecurityDefinition("Bearer",
             new OpenApiSecurityScheme
             {
-                Name = HeaderNames.Authorization,
-                Type = SecuritySchemeType.ApiKey,
-                In = ParameterLocation.Header,
-                Description = "Obtained JWT. (Example: 'Bearer your_token_here')",
+                Type = SecuritySchemeType.Http,
+                Scheme = "Bearer",
+                BearerFormat = "JWT",
+                Description = "Enter JWT token. (Example: 'your_token_here')",
             });
 
         options.MapType<DateOnly>(() => new OpenApiSchema()
         {
-            Type = "string",
+            Type = JsonSchemaType.String,
             Format = "date",
         });
 			
@@ -166,18 +164,24 @@ if (!builder.Environment.IsProduction())
     app.UseSwaggerUI(options =>
     {
         var apiVersionDescriptionProvider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
-				
+        var apiDescriptionProvider = app.Services.GetRequiredService<IApiDescriptionGroupCollectionProvider>();
+        
+        // Only show documents that have actual API endpoints
         foreach (var description in apiVersionDescriptionProvider.ApiVersionDescriptions)
         {
-            var endpoint = $"/swagger/{EndpointConstants.DefaultGroupName}-{description.GroupName}/swagger.json";
-            var name = $"API v{description.ApiVersion}";
+            // Check if this version group has any API descriptions
+            var groupItems = apiDescriptionProvider.ApiDescriptionGroups.Items
+                .FirstOrDefault(g => g.GroupName == description.GroupName);
             
-            Console.WriteLine($"Adding Swagger endpoint: {endpoint} with name: {name}");
-            
-            // Default API group
-            options.SwaggerEndpoint(endpoint, name);
+            // Only add endpoint if the group has items (non-empty)
+            if (groupItems != null && groupItems.Items.Any())
+            {
+                options.SwaggerEndpoint(
+                    $"/swagger/{description.GroupName}/swagger.json",
+                    description.GroupName.ToUpperInvariant());
+            }
         }
-		
+				
         options.RoutePrefix = "swagger";
     });
 }
