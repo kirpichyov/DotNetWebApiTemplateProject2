@@ -14,6 +14,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using SampleProject.Api.Configuration;
 using SampleProject.Api.Configuration.Swagger;
 using SampleProject.Api.Endpoints.Internal;
 using SampleProject.Api.Middleware;
@@ -34,6 +35,8 @@ using Swashbuckle.AspNetCore.Filters;
 const string mainCorsPolicy = "MainPolicy";
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Configuration.AddTestConfiguration();
 
 builder.Host.UseDefaultServiceProvider((_, options) =>
 {
@@ -296,4 +299,8 @@ void SetupLogging(IServiceCollection services, IConfiguration configuration)
             logger.WriteTo.Seq(loggingOptions.Seq.ServerUrl, apiKey: loggingOptions.Seq.ApiKey);
         }
     });
+}
+
+public partial class Program
+{
 }

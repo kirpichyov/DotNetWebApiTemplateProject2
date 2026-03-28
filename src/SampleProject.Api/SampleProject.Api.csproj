@@ -51,4 +51,8 @@
       <Folder Include="Configuration\" />
     </ItemGroup>
 
+    <ItemGroup>
+      <InternalsVisibleTo Include="SampleProject.IntegrationTests" />
+    </ItemGroup>
+
 </Project>
