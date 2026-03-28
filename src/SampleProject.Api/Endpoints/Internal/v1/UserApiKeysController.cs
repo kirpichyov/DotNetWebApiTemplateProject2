@@ -1,9 +1,9 @@
 using Asp.Versioning;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SampleProject.Api.Constants;
 using SampleProject.Api.Security;
-using SampleProject.Application.Constants;
 using SampleProject.Application.Contracts;
 using SampleProject.Application.Models.ApiKeys;
 using SampleProject.Application.Security;
@@ -16,7 +16,7 @@ namespace SampleProject.Api.Endpoints.Internal.v1;
 [Route("v{version:apiVersion}/users/me/api-keys")]
 [ApiExplorerSettings(GroupName = EndpointConstants.DefaultGroupName)]
 [Produces("application/json")]
-[Authorize(AuthenticationSchemes = AuthConstants.MultiAuthScheme)]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 [ServiceFilter(typeof(SecurityContextFilter))]
 public sealed class UserApiKeysController : ControllerBase
 {

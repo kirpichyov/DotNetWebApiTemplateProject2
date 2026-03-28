@@ -1,8 +1,8 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SampleProject.Api.Constants;
 using SampleProject.Api.Security;
-using SampleProject.Application.Constants;
 
 namespace SampleProject.Api.Endpoints.Internal;
 
@@ -10,7 +10,7 @@ namespace SampleProject.Api.Endpoints.Internal;
 [Route("v{version:apiVersion}/[controller]")]
 [ApiExplorerSettings(GroupName = EndpointConstants.DefaultGroupName)]
 [Produces("application/json")]
-[Authorize(AuthenticationSchemes = AuthConstants.MultiAuthScheme)]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 [ServiceFilter(typeof(SecurityContextFilter))]
 public class ApiControllerBase : ControllerBase
 {

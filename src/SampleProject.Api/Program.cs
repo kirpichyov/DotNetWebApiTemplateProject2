@@ -147,26 +147,8 @@ if (string.IsNullOrEmpty(authOptionsForStartup?.Secret))
 
 builder.Services.AddAuthentication(options =>
     {
-        options.DefaultScheme = AuthConstants.MultiAuthScheme;
+        options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
         options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-    })
-    .AddPolicyScheme(AuthConstants.MultiAuthScheme, null, options =>
-    {
-        options.ForwardDefaultSelector = context =>
-        {
-            var authHeader = context.Request.Headers.Authorization.ToString();
-            if (authHeader.StartsWith($"{AuthConstants.ApiKey.Scheme} ", StringComparison.OrdinalIgnoreCase))
-            {
-                return AuthConstants.ApiKey.Scheme;
-            }
-
-            if (context.Request.Query.ContainsKey("apiKey"))
-            {
-                return AuthConstants.ApiKey.Scheme;
-            }
-
-            return JwtBearerDefaults.AuthenticationScheme;
-        };
     })
     .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, jwtOptions =>
     {
@@ -194,7 +176,7 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization(options =>
 {
-    options.FallbackPolicy = new AuthorizationPolicyBuilder(AuthConstants.MultiAuthScheme)
+    options.FallbackPolicy = new AuthorizationPolicyBuilder(JwtBearerDefaults.AuthenticationScheme)
         .RequireAuthenticatedUser()
         .Build();
 });

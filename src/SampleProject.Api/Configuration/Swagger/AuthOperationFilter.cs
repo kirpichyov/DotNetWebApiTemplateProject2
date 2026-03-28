@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json.Nodes;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi;
@@ -21,26 +22,52 @@ internal sealed class AuthOperationFilter : IOperationFilter
 			.OfType<AllowAnonymousAttribute>()
 			.Any();
 
-		var hasAuthorizeAttribute = attributes
+		var authorizeAttributes = attributes
 			.OfType<AuthorizeAttribute>()
-			.Any();
+			.ToList();
 
-		if (allowAnonymous || !hasAuthorizeAttribute)
+		if (allowAnonymous || authorizeAttributes.Count == 0)
 		{
 			return;
 		}
-		
-		var securityRequirements = new List<OpenApiSecurityRequirement>
+
+		var schemeSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (var attr in authorizeAttributes)
 		{
-			new()
+			if (string.IsNullOrWhiteSpace(attr.AuthenticationSchemes))
 			{
-				{ new OpenApiSecuritySchemeReference("Bearer", context.Document), new List<string>() }
-			},
-			new()
-			{
-				{ new OpenApiSecuritySchemeReference(AuthConstants.ApiKey.Scheme, context.Document), new List<string>() }
+				continue;
 			}
-		};
+
+			foreach (var part in attr.AuthenticationSchemes.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+			{
+				schemeSet.Add(part);
+			}
+		}
+
+		List<OpenApiSecurityRequirement> securityRequirements;
+		if (schemeSet.Count > 0 &&
+		    schemeSet.Contains(AuthConstants.ApiKey.Scheme) &&
+		    !schemeSet.Contains(JwtBearerDefaults.AuthenticationScheme))
+		{
+			securityRequirements =
+			[
+				new OpenApiSecurityRequirement
+				{
+					{ new OpenApiSecuritySchemeReference(AuthConstants.ApiKey.Scheme, context.Document), new List<string>() }
+				}
+			];
+		}
+		else
+		{
+			securityRequirements =
+			[
+				new OpenApiSecurityRequirement
+				{
+					{ new OpenApiSecuritySchemeReference("Bearer", context.Document), new List<string>() }
+				}
+			];
+		}
 
 		operation.Security = securityRequirements;
 
