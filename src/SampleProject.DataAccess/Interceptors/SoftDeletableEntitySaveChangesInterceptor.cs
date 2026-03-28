@@ -1,4 +1,3 @@
-using Kirpichyov.FriendlyJwt.Contracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,20 +32,20 @@ public sealed class SoftDeletableEntitySaveChangesInterceptor : SaveChangesInter
     private void UpdateSoftDeletableEntities(DbContext dbContext)
     {
         using var scope = _serviceProvider.CreateScope();
-        var jwtTokenReader = scope.ServiceProvider.GetRequiredService<IJwtTokenReader>();
+        var authContext = scope.ServiceProvider.GetRequiredService<IAuthContext>();
         
         var entries = dbContext.ChangeTracker.Entries()
-            .Where(e => e is { Entity: IAuditEntity, State: EntityState.Deleted });
+            .Where(e => e is { Entity: ISoftDeletable, State: EntityState.Deleted });
 
         foreach (var entry in entries)
         {
             var entity = (ISoftDeletable)entry.Entity;
-            var userEmail = jwtTokenReader.UserEmail;
+            var deletedBy = authContext.IsLoggedIn ? authContext.Username : "system";
 
             switch (entry.State)
             {
                 case EntityState.Deleted:
-                    entity.MarkAsDeleted(userEmail, DateTimeOffset.UtcNow);
+                    entity.MarkAsDeleted(deletedBy, DateTimeOffset.UtcNow);
                     
                     entry.State = EntityState.Modified;
                     dbContext.Entry(entity).Property(x => x.IsDeleted).IsModified = true;

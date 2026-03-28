@@ -10,6 +10,7 @@ public sealed class RefreshToken : AuditEntity<Guid>
     }
     
     public string RefreshTokenHash { get; set; }
+    public string AccessTokenHash { get; set; }
     public string JwtId { get; set; }
     public Guid UserId { get; set; }
     public DateTimeOffset ExpiresAtUtc { get; set; }
@@ -20,6 +21,7 @@ public sealed class RefreshToken : AuditEntity<Guid>
 
     public static RefreshToken Create(
         string refreshTokenHash,
+        string accessTokenHash,
         string jwtId,
         Guid userId,
         DateTimeOffset expiresAtUtc)
@@ -27,6 +29,7 @@ public sealed class RefreshToken : AuditEntity<Guid>
         return new RefreshToken
         {
             RefreshTokenHash = refreshTokenHash,
+            AccessTokenHash = accessTokenHash,
             JwtId = jwtId,
             UserId = userId,
             ExpiresAtUtc = expiresAtUtc,

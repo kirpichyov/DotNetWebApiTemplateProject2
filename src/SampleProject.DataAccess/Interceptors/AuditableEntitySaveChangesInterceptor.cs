@@ -1,4 +1,3 @@
-using Kirpichyov.FriendlyJwt.Contracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,7 +32,8 @@ public sealed class AuditableEntitySaveChangesInterceptor : SaveChangesIntercept
     private void UpdateAuditableEntities(DbContext dbContext)
     {
         using var scope = _serviceProvider.CreateScope();
-        var jwtTokenReader = scope.ServiceProvider.GetRequiredService<IJwtTokenReader>();
+        var authContext = scope.ServiceProvider.GetRequiredService<IAuthContext>();
+        var actor = authContext.IsLoggedIn ? authContext.Username : "system";
         
         var entries = dbContext.ChangeTracker.Entries()
             .Where(e => e is { Entity: IAuditEntity, State: EntityState.Added or EntityState.Modified });
@@ -41,17 +41,16 @@ public sealed class AuditableEntitySaveChangesInterceptor : SaveChangesIntercept
         foreach (var entry in entries)
         {
             var entity = (IAuditEntity)entry.Entity;
-            var userEmail = jwtTokenReader.UserEmail;
 
             switch (entry.State)
             {
                 case EntityState.Added:
                     entity.CreatedAtUtc = DateTimeOffset.UtcNow;
-                    entity.CreatedBy = userEmail;
+                    entity.CreatedBy = actor;
                     break;
                 case EntityState.Modified:
                     entity.UpdatedAtUtc = DateTimeOffset.UtcNow;
-                    entity.UpdatedBy = userEmail;
+                    entity.UpdatedBy = actor;
                     break;
             }
         }

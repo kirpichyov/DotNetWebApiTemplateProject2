@@ -1,9 +1,10 @@
-﻿using System.Net;
+using System.Net;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi;
 using SampleProject.Api.Constants;
+using SampleProject.Application.Constants;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace SampleProject.Api.Configuration.Swagger;
@@ -24,30 +25,24 @@ internal sealed class AuthOperationFilter : IOperationFilter
 			.OfType<AuthorizeAttribute>()
 			.Any();
 
-		var apiExplorerAttribute = attributes
-			.OfType<ApiExplorerSettingsAttribute>()
-			.FirstOrDefault();
-		
 		if (allowAnonymous || !hasAuthorizeAttribute)
 		{
 			return;
 		}
 		
-		var id = apiExplorerAttribute?.GroupName switch
+		var securityRequirements = new List<OpenApiSecurityRequirement>
 		{
-			EndpointConstants.DefaultGroupName => "Bearer",
-			_ => "Bearer"
-		};
-		
-		var securityRequirement = new OpenApiSecurityRequirement
-		{
+			new()
 			{
-				new OpenApiSecuritySchemeReference(id, context.Document),
-				new List<string>()
+				{ new OpenApiSecuritySchemeReference("Bearer", context.Document), new List<string>() }
+			},
+			new()
+			{
+				{ new OpenApiSecuritySchemeReference(AuthConstants.ApiKey.Scheme, context.Document), new List<string>() }
 			}
 		};
 
-		operation.Security = new[] { securityRequirement };
+		operation.Security = securityRequirements;
 
 		operation.Responses?.TryAdd(
 			((int)HttpStatusCode.Unauthorized).ToString(),

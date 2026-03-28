@@ -1,8 +1,9 @@
-﻿using SampleProject.Core.Models.Enums;
+﻿using SampleProject.Core.Contracts;
+using SampleProject.Core.Models.Enums;
 
 namespace SampleProject.Core.Models.Entities;
 
-public sealed class User : AuditEntity<Guid>
+public sealed class User : AuditEntity<Guid>, ISoftDeletable
 {
     private User()
         : base(Guid.CreateVersion7())
@@ -13,6 +14,10 @@ public sealed class User : AuditEntity<Guid>
     public string FullName { get; set; }
     public string PasswordHash { get; set; }
     public Role Role { get; set; }
+
+    public bool IsDeleted { get; set; }
+    public DateTimeOffset? DeletedAtUtc { get; set; }
+    public string DeletedBy { get; set; }
 
     public static User Create(
         string username,
@@ -26,6 +31,7 @@ public sealed class User : AuditEntity<Guid>
             FullName = fullName,
             PasswordHash = passwordHash,
             Role = role,
+            IsDeleted = false,
         };
         
         return user;

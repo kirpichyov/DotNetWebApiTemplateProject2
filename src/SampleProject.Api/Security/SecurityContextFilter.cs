@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using SampleProject.Application.Security;
 
@@ -20,13 +20,13 @@ public sealed class SecurityContextFilter : IActionFilter
         var securityContext = context.HttpContext.RequestServices.GetRequiredService<ISecurityContext>();
         if (!securityContext.IsAuthenticated)
         {
-            context.Result = new ForbidResult("Bearer");
+            context.Result = new ForbidResult();
             return;
         }
 
         if (!securityContext.HasRole(roleAttribute.Role))
         {
-            context.Result = new ForbidResult("Bearer");
+            context.Result = new ForbidResult();
             return;
         }
     }

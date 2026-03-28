@@ -1,22 +1,25 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
 using FluentValidation;
 using HealthChecks.UI.Client;
-using Kirpichyov.FriendlyJwt.DependencyInjection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using SampleProject.Api.Configuration.Swagger;
 using SampleProject.Api.Endpoints.Internal;
 using SampleProject.Api.Middleware;
 using SampleProject.Api.Security;
 using SampleProject.Application;
+using SampleProject.Application.Constants;
 using SampleProject.Application.Security;
 using SampleProject.Core.Options;
 using SampleProject.DataAccess;
@@ -42,7 +45,6 @@ RegisterOptions(builder.Services, builder.Configuration);
 SetupLogging(builder.Services, builder.Configuration);
 
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddFriendlyJwt();
 builder.Services.AddDataAccessServices(builder.Configuration, builder.Environment);
 builder.Services.AddApplicationServices(builder.Configuration);
 builder.Services.AddHttpClient();
@@ -87,6 +89,16 @@ if (!builder.Environment.IsProduction())
                 Description = "Enter JWT token. (Example: 'your_token_here')",
             });
 
+        options.AddSecurityDefinition(AuthConstants.ApiKey.Scheme,
+            new OpenApiSecurityScheme
+            {
+                Type = SecuritySchemeType.ApiKey,
+                In = ParameterLocation.Header,
+                Name = "Authorization",
+                Description =
+                    "Use header value: ApiKey apik_<guidN>.<secret32> — or pass the full key in query ?apiKey=",
+            });
+
         options.MapType<DateOnly>(() => new OpenApiSchema()
         {
             Type = JsonSchemaType.String,
@@ -125,33 +137,67 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
         options.JsonSerializerOptions.Converters.Add(new DateOnlyJsonConverter());
         options.JsonSerializerOptions.Converters.Add(new NullableDateOnlyJsonConverter());
-    })
-    .AddFriendlyJwtAuthentication(configuration =>
-    {
-        var authOptions = builder.Configuration.GetSection(nameof(AuthOptions)).Get<AuthOptions>();
-        configuration.Bind(authOptions);
-    }, jwtPostSetupDelegate: jwtConfig =>
-    {
-        jwtConfig.Events = new JwtBearerEvents
-        {
-            OnMessageReceived = context =>
-            {
-                var cookieIsPresent = context.Request.Cookies.TryGetValue("accessToken", out var accessToken);
-                if (cookieIsPresent && !string.IsNullOrEmpty(accessToken))
-                {
-                    context.Token = accessToken;
-                }
+    });
 
-                return Task.CompletedTask;
-            },
+var authOptionsForStartup = builder.Configuration.GetSection(nameof(AuthOptions)).Get<AuthOptions>();
+if (string.IsNullOrEmpty(authOptionsForStartup?.Secret))
+{
+    throw new InvalidOperationException($"AuthOptions.{nameof(AuthOptions.Secret)} must be provided in configuration.");
+}
+
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultScheme = AuthConstants.MultiAuthScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddPolicyScheme(AuthConstants.MultiAuthScheme, null, options =>
+    {
+        options.ForwardDefaultSelector = context =>
+        {
+            var authHeader = context.Request.Headers.Authorization.ToString();
+            if (authHeader.StartsWith($"{AuthConstants.ApiKey.Scheme} ", StringComparison.OrdinalIgnoreCase))
+            {
+                return AuthConstants.ApiKey.Scheme;
+            }
+
+            if (context.Request.Query.ContainsKey("apiKey"))
+            {
+                return AuthConstants.ApiKey.Scheme;
+            }
+
+            return JwtBearerDefaults.AuthenticationScheme;
+        };
+    })
+    .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, jwtOptions =>
+    {
+        jwtOptions.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = authOptionsForStartup.Issuer,
+            ValidAudience = authOptionsForStartup.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(authOptionsForStartup.Secret)),
+            ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+            ClockSkew = TimeSpan.FromSeconds(30),
+            NameClaimType = AuthConstants.UsernameClaim,
         };
 
         if (builder.Environment.EnvironmentName == "IntegrationTests")
         {
-            jwtConfig.TokenValidationParameters.SignatureValidator = (token, _) => new JsonWebToken(token);
-            jwtConfig.TokenValidationParameters.IssuerSigningKeyValidator = (_, _, _) => true;
+            jwtOptions.TokenValidationParameters.SignatureValidator = (token, _) => new JsonWebToken(token);
+            jwtOptions.TokenValidationParameters.IssuerSigningKeyValidator = (_, _, _) => true;
         }
-    });
+    })
+    .AddScheme<ApiKeyAuthSchemeOptions, ApiKeyAuthHandler>(AuthConstants.ApiKey.Scheme, _ => { });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder(AuthConstants.MultiAuthScheme)
+        .RequireAuthenticatedUser()
+        .Build();
+});
 
 builder.Services.AddHealthChecks()
     .AddCheck("Self", () => HealthCheckResult.Healthy(), tags: ["api"]);
@@ -220,7 +266,7 @@ app.MapHealthChecks("/health", new HealthCheckOptions()
 
 try
 {
-    app.Run();
+    await app.RunAsync();
 }
 catch (Exception ex)
 {
@@ -229,7 +275,7 @@ catch (Exception ex)
 finally
 {
     Log.Information("Shut down complete");
-    Log.CloseAndFlush();
+    await Log.CloseAndFlushAsync();
 }
 
 return;

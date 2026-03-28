@@ -1,22 +1,24 @@
-﻿using Kirpichyov.FriendlyJwt;
-using Kirpichyov.FriendlyJwt.Contracts;
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using SampleProject.Application.Constants;
 using SampleProject.Application.Contracts;
 using SampleProject.Application.Mapping;
+using SampleProject.Application.Utils;
 using SampleProject.Application.Models.Auth;
 using SampleProject.Application.Models.Users;
 using SampleProject.Application.Security;
-using SampleProject.Application.Utils;
 using SampleProject.Core.Exceptions;
 using SampleProject.Core.Models.Entities;
 using SampleProject.Core.Models.Enums;
 using SampleProject.Core.Options;
 using SampleProject.Core.Utils;
 using SampleProject.DataAccess.Connection;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using JwtRegisteredClaimNames = Microsoft.IdentityModel.JsonWebTokens.JwtRegisteredClaimNames;
 
 namespace SampleProject.Application.Services;
 
@@ -27,9 +29,7 @@ public sealed class AuthService : IAuthService
     private readonly DatabaseContext _databaseContext;
     private readonly AuthOptions _authOptions;
     private readonly ISecurityContext _securityContext;
-    private readonly IJwtTokenVerifier _jwtTokenVerifier;
     private readonly ILogger<AuthService> _logger;
-    private readonly IHttpContextAccessor _httpContextAccessor;
 
     public AuthService(
         IValidatorFactory validatorFactory,
@@ -37,17 +37,13 @@ public sealed class AuthService : IAuthService
         DatabaseContext databaseContext,
         IOptions<AuthOptions> authOptions,
         ISecurityContext securityContext,
-        IJwtTokenVerifier jwtTokenVerifier,
-        ILogger<AuthService> logger,
-        IHttpContextAccessor httpContextAccessor)
+        ILogger<AuthService> logger)
     {
         _validatorFactory = validatorFactory;
         _hashingProvider = hashingProvider;
         _databaseContext = databaseContext;
         _securityContext = securityContext;
-        _jwtTokenVerifier = jwtTokenVerifier;
         _logger = logger;
-        _httpContextAccessor = httpContextAccessor;
         _authOptions = authOptions.Value;
     }
 
@@ -65,15 +61,15 @@ public sealed class AuthService : IAuthService
                     .Add("username", request.Username)
                     .Build());
         }
-        
+
         var passwordHash = _hashingProvider.Hash(request.Password);
-        
+
         var user = User.Create(
             request.Username,
             request.FullName,
             passwordHash,
             Role.User);
-        
+
         _databaseContext.Users.Add(user);
         await _databaseContext.SaveChangesAsync();
 
@@ -83,7 +79,7 @@ public sealed class AuthService : IAuthService
     public async Task<JwtAuthResponse> SignIn(SignInRequest request)
     {
         _validatorFactory.ValidateAndThrow(request);
-        
+
         var user = await _databaseContext.Users
             .FirstOrDefaultAsync(u => u.Username == request.Username);
 
@@ -94,9 +90,9 @@ public sealed class AuthService : IAuthService
                     .Add("username", request.Username)
                     .Build());
         }
-        
+
         var hashMatches = _hashingProvider.Verify(request.Password, user.PasswordHash);
-        
+
         if (!hashMatches)
         {
             throw new ValidationFailedException("Credentials are invalid",
@@ -105,123 +101,53 @@ public sealed class AuthService : IAuthService
                     .Build());
         }
 
-        var jwtObject = GenerateAccessToken(user);
+        var accessToken = GenerateAccessToken(user);
 
         if (request.AuthType is AuthTypeModel.AccessTokenOnly)
         {
-            return MapToJwtAuthResponse(user, jwtObject);
+            return ToJwtAuthResponse(user, accessToken);
         }
-        
-        var (refreshTokenObject, refreshToken) = GenerateRefreshToken(user, jwtObject.TokenId);
 
-        if (request.AuthType is AuthTypeModel.HttpOnlyCookie)
-        {
-            _httpContextAccessor.HttpContext!.Response.Cookies.Delete("accessToken");
-            _httpContextAccessor.HttpContext!.Response.Cookies.Delete("refreshToken");
-            _httpContextAccessor.HttpContext!.Response.Cookies.Delete("userId");
-            
-            _httpContextAccessor.HttpContext!.Response.Cookies.Append(
-                "accessToken",
-                jwtObject.Token,
-                GetCookieOptions(jwtObject.ExpiresAtUtc));
-            
-            _httpContextAccessor.HttpContext.Response.Cookies.Append(
-                "refreshToken",
-                refreshToken,
-                GetCookieOptions(refreshTokenObject.ExpiresAtUtc));
-            
-            _httpContextAccessor.HttpContext.Response.Cookies.Append(
-                "userId",
-                user.Id.ToString(),
-                GetCookieOptions(refreshTokenObject.ExpiresAtUtc, httpOnly: false));
-        }
-        
+        var (refreshTokenObject, refreshTokenPlain) = GenerateRefreshToken(user, accessToken);
+
         _databaseContext.RefreshTokens.Add(refreshTokenObject);
         await _databaseContext.SaveChangesAsync();
-        
-        return MapToJwtAuthResponse(user, jwtObject, refreshTokenObject, refreshToken);
+
+        return ToJwtAuthResponse(user, accessToken, refreshTokenPlain, refreshTokenObject);
     }
 
     public async Task DeactivateRefreshToken(ExpireRefreshTokenRequest request)
     {
         _validatorFactory.ValidateAndThrow(request);
-        
-        var verificationResult = _jwtTokenVerifier.Verify(request.AccessToken);
-        
-        if (!verificationResult.IsValid)
-        {
-            throw new ValidationFailedException("Access token is invalid");
-        }
-        
-        var userId = verificationResult.UserId;
-        
-        if (!Guid.TryParse(userId, out var userGuid))
-        {
-            throw new ValidationFailedException("Access token is invalid");
-        }
-        
+
         var refreshTokenHash = _hashingProvider.HashSha256(request.RefreshToken);
-        
-        var refreshToken = _databaseContext.RefreshTokens
-            .FirstOrDefault(rt => rt.RefreshTokenHash == refreshTokenHash &&
-                                  rt.UserId == userGuid &&
-                                  rt.JwtId == verificationResult.TokenId &&
+        var accessTokenHash = _hashingProvider.HashSha256(request.AccessToken);
+
+        var refreshToken = await _databaseContext.RefreshTokens
+            .FirstOrDefaultAsync(rt => rt.RefreshTokenHash == refreshTokenHash &&
+                                  rt.AccessTokenHash == accessTokenHash &&
                                   rt.IsActive);
 
         if (refreshToken is null)
         {
             return;
         }
-        
-        if (refreshToken.IsExpired(DateTime.UtcNow))
-        {
-            return;
-        }
-        
-        refreshToken.Deactivate(RefreshTokenDeactivationReason.LoggedOut);
-        await _databaseContext.SaveChangesAsync();
-    }
-    
-    public async Task DeactivateCookieRefreshToken()
-    {
-        var cookieRefreshToken = _httpContextAccessor.HttpContext?.Request.Cookies["refreshToken"];
-        
-        if (string.IsNullOrEmpty(cookieRefreshToken))
-        {
-            _logger.LogWarning("Refresh token cookie is missing, cannot deactivate refresh token");
-            return;
-        }
-        
-        var refreshTokenHash = _hashingProvider.HashSha256(cookieRefreshToken);
-        
-        var refreshToken = _databaseContext.RefreshTokens
-            .FirstOrDefault(rt => rt.RefreshTokenHash == refreshTokenHash &&
-                                  rt.IsActive);
 
-        if (refreshToken is null)
-        {
-            return;
-        }
-        
         if (refreshToken.IsExpired(DateTime.UtcNow))
         {
             return;
         }
-        
+
         refreshToken.Deactivate(RefreshTokenDeactivationReason.LoggedOut);
         await _databaseContext.SaveChangesAsync();
-        
-        _httpContextAccessor.HttpContext.Response.Cookies.Delete("accessToken");
-        _httpContextAccessor.HttpContext.Response.Cookies.Delete("refreshToken");
-        _httpContextAccessor.HttpContext.Response.Cookies.Delete("userId");
     }
 
     public async Task ChangePassword(ChangePasswordRequest request)
     {
         _validatorFactory.ValidateAndThrow(request);
-        
+
         var userId = _securityContext.GetUserIdOrThrow();
-        
+
         var user = await _databaseContext.Users
             .FirstOrDefaultAsync(u => u.Id == userId);
 
@@ -229,25 +155,25 @@ public sealed class AuthService : IAuthService
         {
             throw new ResourceNotFoundException("User");
         }
-        
+
         var passwordMatches = _hashingProvider.Verify(request.CurrentPassword, user.PasswordHash);
-        
+
         if (!passwordMatches)
         {
             throw new ValidationFailedException("Current password does not match");
         }
-        
+
         var passwordSameAsCurrent = _hashingProvider.Verify(request.NewPassword, user.PasswordHash);
-        
+
         if (passwordSameAsCurrent)
         {
             throw new ValidationFailedException("New password must be different from the current password");
         }
-        
+
         var newPasswordHash = _hashingProvider.Hash(request.NewPassword);
-        
+
         await using var transaction = await _databaseContext.Database.BeginTransactionAsync();
-        
+
         try
         {
             user.ChangePassword(newPasswordHash);
@@ -263,7 +189,7 @@ public sealed class AuthService : IAuthService
                     refreshToken.Deactivate(RefreshTokenDeactivationReason.PasswordChanged);
                 }
             }
-            
+
             await _databaseContext.SaveChangesAsync();
             await transaction.CommitAsync();
         }
@@ -283,51 +209,14 @@ public sealed class AuthService : IAuthService
             request.AccessToken, request.RefreshToken);
 
         existingRefreshTokenObject.Deactivate(RefreshTokenDeactivationReason.Refreshed);
-        
-        var jwtObject = GenerateAccessToken(existingRefreshTokenObject.User);
-        var (newRefreshTokenObject, refreshToken) = GenerateRefreshToken(existingRefreshTokenObject.User, jwtObject.TokenId);
-        
+
+        var accessToken = GenerateAccessToken(existingRefreshTokenObject.User);
+        var (newRefreshTokenObject, refreshTokenPlain) = GenerateRefreshToken(existingRefreshTokenObject.User, accessToken);
+
         _databaseContext.RefreshTokens.Add(newRefreshTokenObject);
         await _databaseContext.SaveChangesAsync();
-        
-        return MapToJwtAuthResponse(existingRefreshTokenObject.User, jwtObject, newRefreshTokenObject, refreshToken);
-    }
-    
-    public async Task<JwtAuthResponse> RefreshCookieAccessToken()
-    {
-        var refreshToken = _httpContextAccessor.HttpContext!.Request.Cookies["refreshToken"];
-        
-        if (string.IsNullOrEmpty(refreshToken))
-        {
-            throw new ValidationFailedException("Refresh token cookie is missing");
-        }
-        
-        var existingRefreshTokenObject = await ValidateRefreshTokenOrThrow(refreshToken);
-        
-        existingRefreshTokenObject.Deactivate(RefreshTokenDeactivationReason.Refreshed);
-        
-        var jwtObject = GenerateAccessToken(existingRefreshTokenObject.User);
-        var (newRefreshTokenObject, newRefreshToken) = GenerateRefreshToken(existingRefreshTokenObject.User, jwtObject.TokenId);
-        
-        _databaseContext.RefreshTokens.Add(newRefreshTokenObject);
-        await _databaseContext.SaveChangesAsync();
-        
-        _httpContextAccessor.HttpContext.Response.Cookies.Append(
-            "accessToken",
-            jwtObject.Token,
-            GetCookieOptions(jwtObject.ExpiresAtUtc));
-        
-        _httpContextAccessor.HttpContext.Response.Cookies.Append(
-            "refreshToken",
-            newRefreshToken,
-            GetCookieOptions(newRefreshTokenObject.ExpiresAtUtc));
-        
-        _httpContextAccessor.HttpContext.Response.Cookies.Append(
-            "userId",
-            existingRefreshTokenObject.User.Id.ToString(),
-            GetCookieOptions(newRefreshTokenObject.ExpiresAtUtc, httpOnly: false));
-        
-        return MapToJwtAuthResponse(existingRefreshTokenObject.User, jwtObject, newRefreshTokenObject, newRefreshToken);
+
+        return ToJwtAuthResponse(existingRefreshTokenObject.User, accessToken, refreshTokenPlain, newRefreshTokenObject);
     }
 
     public async Task<CurrentUserDataResponse> GetCurrentUserData()
@@ -351,157 +240,132 @@ public sealed class AuthService : IAuthService
     private GeneratedTokenInfo GenerateAccessToken(User user)
     {
         ArgumentNullException.ThrowIfNull(user);
-        
-        var jwtObject = new JwtTokenBuilder(_authOptions.AccessTokenLifetime, _authOptions.Secret)
-            .WithAudience(_authOptions.Audience)
-            .WithIssuer(_authOptions.Issuer)
-            .WithUserIdPayloadData(user.Id.ToString())
-            .WithUserName(user.Username)
-            .Build();
-        
-        return jwtObject;
+
+        if (string.IsNullOrEmpty(_authOptions.Secret))
+        {
+            throw new InvalidOperationException("JWT secret is not configured");
+        }
+
+        var jwtId = Guid.CreateVersion7().ToString();
+
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(JwtRegisteredClaimNames.Jti, jwtId),
+            new(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
+            new(AuthConstants.UserIdClaim, user.Id.ToString()),
+            new(AuthConstants.UsernameClaim, user.Username),
+        };
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_authOptions.Secret));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var expiresAtUtc = DateTime.UtcNow.Add(_authOptions.AccessTokenLifetime);
+
+        var token = new JwtSecurityToken(
+            issuer: _authOptions.Issuer,
+            audience: _authOptions.Audience,
+            claims: claims,
+            notBefore: DateTime.UtcNow,
+            expires: expiresAtUtc,
+            signingCredentials: creds);
+
+        var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+
+        return new GeneratedTokenInfo(jwtId, tokenString, expiresAtUtc);
     }
-    
-    private (RefreshToken RefreshTokenObject, string RefreshToken) GenerateRefreshToken(User user, string jwtId)
+
+    private (RefreshToken Entity, string PlainRefreshToken) GenerateRefreshToken(
+        User user,
+        GeneratedTokenInfo accessToken)
     {
         ArgumentNullException.ThrowIfNull(user);
-        ArgumentNullException.ThrowIfNull(jwtId);
-        
-        var refreshToken = SecretGenerator.GenerateSecret(length: 64);
-        var refreshTokenHash = _hashingProvider.HashSha256(refreshToken);
-        
-        var refreshTokenObject = RefreshToken.Create(
+        ArgumentNullException.ThrowIfNull(accessToken);
+
+        var refreshTokenPlain = SecretGenerator.GenerateSecret(length: 64);
+        var refreshTokenHash = _hashingProvider.HashSha256(refreshTokenPlain);
+        var accessTokenHash = _hashingProvider.HashSha256(accessToken.Token);
+
+        var expiresAtUtc = DateTimeOffset.UtcNow.Add(_authOptions.RefreshTokenLifetime);
+
+        var entity = RefreshToken.Create(
             refreshTokenHash,
-            jwtId,
+            accessTokenHash,
+            accessToken.Id,
             user.Id,
-            DateTimeOffset.UtcNow.Add(_authOptions.RefreshTokenLifetime));
-        
-        return (refreshTokenObject, refreshToken);
+            expiresAtUtc);
+
+        return (entity, refreshTokenPlain);
     }
 
     private async Task<RefreshToken> ValidateRefreshTokenOrThrow(string accessToken, string refreshToken)
     {
-        var verificationResult = _jwtTokenVerifier.Verify(accessToken);
-
-        if (!verificationResult.IsValid)
-        {
-            throw new ValidationFailedException("Access token is invalid");
-        }
-
-        var userId = verificationResult.UserId;
-
-        if (!Guid.TryParse(userId, out var userGuid))
-        {
-            throw new ValidationFailedException("Access token is invalid");
-        }
-
         var refreshTokenHash = _hashingProvider.HashSha256(refreshToken);
-        
-        var existingRefreshTokenObject = await _databaseContext.RefreshTokens
+        var accessTokenHash = _hashingProvider.HashSha256(accessToken);
+
+        var existingRefreshTokenEntity = await _databaseContext.RefreshTokens
             .Include(rt => rt.User)
             .FirstOrDefaultAsync(rt => rt.RefreshTokenHash == refreshTokenHash &&
-                                       rt.UserId == userGuid &&
-                                       rt.JwtId == verificationResult.TokenId &&
+                                       rt.AccessTokenHash == accessTokenHash &&
                                        rt.IsActive);
 
-        if (existingRefreshTokenObject is null)
+        if (existingRefreshTokenEntity is null)
         {
-            throw new ValidationFailedException("Refresh token is invalid or expired",
-                new DetailsBuilder()
-                    .Add(DetailsKeys.ResourceId, refreshToken)
-                    .Build());
+            throw new ValidationFailedException("Refresh token is invalid or expired");
         }
 
-        if (existingRefreshTokenObject.IsExpired(DateTime.UtcNow))
+        if (existingRefreshTokenEntity.IsExpired(DateTime.UtcNow))
         {
-            throw new ValidationFailedException("Refresh token is expired",
-                new DetailsBuilder()
-                    .Add(DetailsKeys.ResourceId, refreshToken)
-                    .Build());
+            throw new ValidationFailedException("Refresh token is expired");
         }
 
-        return existingRefreshTokenObject;
-    }
-    
-    private async Task<RefreshToken> ValidateRefreshTokenOrThrow(string refreshToken)
-    {
-        var refreshTokenHash = _hashingProvider.HashSha256(refreshToken);
-        
-        var existingRefreshTokenObject = await _databaseContext.RefreshTokens
-            .Include(rt => rt.User)
-            .FirstOrDefaultAsync(rt => rt.RefreshTokenHash == refreshTokenHash &&
-                                       rt.IsActive);
-
-        if (existingRefreshTokenObject is null)
+        if (existingRefreshTokenEntity.User.IsDeleted)
         {
-            throw new ValidationFailedException("Refresh token is invalid or expired",
-                new DetailsBuilder()
-                    .Add(DetailsKeys.ResourceId, refreshToken)
-                    .Build());
+            throw new ValidationFailedException("User associated with the refresh token is deleted");
         }
 
-        if (existingRefreshTokenObject.IsExpired(DateTime.UtcNow))
-        {
-            throw new ValidationFailedException("Refresh token is expired",
-                new DetailsBuilder()
-                    .Add(DetailsKeys.ResourceId, refreshToken)
-                    .Build());
-        }
-
-        return existingRefreshTokenObject;
+        return existingRefreshTokenEntity;
     }
 
-    private static JwtAuthResponse MapToJwtAuthResponse(
-        User user,
-        GeneratedTokenInfo jwtToken,
-        RefreshToken refreshTokenObject,
-        string refreshToken)
+    private static JwtAuthResponse ToJwtAuthResponse(User user, GeneratedTokenInfo accessToken)
     {
-        ArgumentNullException.ThrowIfNull(user);
-        ArgumentNullException.ThrowIfNull(jwtToken);
-        ArgumentNullException.ThrowIfNull(refreshToken);
-
-        var jwtAuthResponse = MapToJwtAuthResponse(user, jwtToken);
-
-        jwtAuthResponse.RefreshToken = new RefreshTokenModel
-        {
-            Token = refreshToken,
-            ExpiresAtUtc = refreshTokenObject.ExpiresAtUtc.UtcDateTime,
-        };
-        
-        return jwtAuthResponse;
-    }
-    
-    private static JwtAuthResponse MapToJwtAuthResponse(
-        User user,
-        GeneratedTokenInfo jwtToken)
-    {
-        ArgumentNullException.ThrowIfNull(user);
-        ArgumentNullException.ThrowIfNull(jwtToken);
-        
         return new JwtAuthResponse
         {
             UserId = user.Id,
             Username = user.Username,
             AccessToken = new AccessTokenModel
             {
-                Token = jwtToken.Token,
-                ExpiresAtUtc = jwtToken.ExpiresAtUtc,
-            }
+                Token = accessToken.Token,
+                ExpiresAtUtc = accessToken.ExpiresAtUtc,
+            },
         };
     }
-    
-    private static CookieOptions GetCookieOptions(
-        DateTimeOffset expiresAtUtc,
-        bool httpOnly = true)
+
+    private static JwtAuthResponse ToJwtAuthResponse(
+        User user,
+        GeneratedTokenInfo accessToken,
+        string refreshTokenPlain,
+        RefreshToken refreshTokenEntity)
     {
-        return new CookieOptions
+        return new JwtAuthResponse
         {
-            Expires = expiresAtUtc,
-            HttpOnly = httpOnly,
-            IsEssential = true,
-            Secure = true,
-            SameSite = SameSiteMode.Lax,
+            UserId = user.Id,
+            Username = user.Username,
+            AccessToken = new AccessTokenModel
+            {
+                Token = accessToken.Token,
+                ExpiresAtUtc = accessToken.ExpiresAtUtc,
+            },
+            RefreshToken = new RefreshTokenModel
+            {
+                Token = refreshTokenPlain,
+                ExpiresAtUtc = refreshTokenEntity.ExpiresAtUtc.UtcDateTime,
+            },
         };
     }
+
+    private sealed record GeneratedTokenInfo(
+        string Id,
+        string Token,
+        DateTime ExpiresAtUtc);
 }

@@ -4,5 +4,4 @@ public enum AuthTypeModel
 {
     AccessTokenOnly,
     AccessTokenWithRefreshToken,
-    HttpOnlyCookie,
 }

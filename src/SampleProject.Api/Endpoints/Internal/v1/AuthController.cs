@@ -9,6 +9,7 @@ using SampleProject.Core.Models.Api;
 namespace SampleProject.Api.Endpoints.Internal.v1;
 
 [ApiVersion("1")]
+[Route("v{version:apiVersion}/auth")]
 public sealed class AuthController : ApiControllerBase
 {
     private readonly IAuthService _authService;
@@ -55,17 +56,7 @@ public sealed class AuthController : ApiControllerBase
         var response = await _authService.RefreshAccessToken(request);
         return Ok(response);
     }
-    
-    [HttpPost("refresh-cookie-access-token")]
-    [AllowAnonymous]
-    [ProducesResponseType(typeof(JwtAuthResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> RefreshCookieAccessTokenAsync()
-    {
-        var response = await _authService.RefreshCookieAccessToken();
-        return Ok(response);
-    }
-    
+
     [HttpPost("change-password")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
@@ -81,15 +72,6 @@ public sealed class AuthController : ApiControllerBase
     public async Task<IActionResult> DeactivateRefreshTokenAsync([FromBody] ExpireRefreshTokenRequest request)
     {
         await _authService.DeactivateRefreshToken(request);
-        return NoContent();
-    }
-    
-    [HttpPost("deactivate-cookie-refresh-token")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> DeactivateCookieRefreshTokenAsync()
-    {
-        await _authService.DeactivateCookieRefreshToken();
         return NoContent();
     }
 }

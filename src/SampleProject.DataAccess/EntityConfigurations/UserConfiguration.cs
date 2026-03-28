@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SampleProject.Core.Models.Entities;
 using SampleProject.Core.Models.Enums;
 
@@ -20,6 +21,12 @@ public sealed class UserConfiguration : AuditEntityBaseConfiguration<User, Guid>
                 stringValue => Common.ToEnumFast<Role>(stringValue, RoleExtensions.TryParse))
             .IsRequired();
 
-        builder.HasIndex(x => x.Username).IsUnique();
+        builder.Property(x => x.IsDeleted).IsRequired();
+        builder.Property(x => x.DeletedAtUtc);
+        builder.Property(x => x.DeletedBy);
+
+        builder.HasIndex(x => x.Username)
+            .IsUnique()
+            .HasFilter("is_deleted = false");
     }
 }

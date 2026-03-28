@@ -14,6 +14,9 @@ public sealed class RefreshTokenConfiguration : AuditEntityBaseConfiguration<Ref
         builder.Property(x => x.RefreshTokenHash)
             .IsRequired();
 
+        builder.Property(x => x.AccessTokenHash)
+            .IsRequired();
+
         builder.Property(x => x.JwtId)
             .IsRequired();
 
@@ -31,9 +34,10 @@ public sealed class RefreshTokenConfiguration : AuditEntityBaseConfiguration<Ref
         
         builder.HasIndex(x => x.RefreshTokenHash)
             .IsUnique();
-        
-        builder.HasIndex(x => x.JwtId)
-            .IsUnique();
+
+        builder.HasIndex(x => new { x.AccessTokenHash, x.RefreshTokenHash });
+
+        builder.HasIndex(x => new { x.AccessTokenHash, x.RefreshTokenHash, x.IsActive });
         
         builder.HasOne(x => x.User)
             .WithMany()

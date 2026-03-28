@@ -20,6 +20,9 @@ namespace SampleProject.DataAccess.Migrations
                     full_name = table.Column<string>(type: "text", nullable: false),
                     password_hash = table.Column<string>(type: "text", nullable: false),
                     role = table.Column<string>(type: "text", nullable: false),
+                    is_deleted = table.Column<bool>(type: "boolean", nullable: false),
+                    deleted_at_utc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    deleted_by = table.Column<string>(type: "text", nullable: true),
                     created_at_utc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at_utc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     created_by = table.Column<string>(type: "text", nullable: true),
@@ -36,6 +39,7 @@ namespace SampleProject.DataAccess.Migrations
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     refresh_token_hash = table.Column<string>(type: "text", nullable: false),
+                    access_token_hash = table.Column<string>(type: "text", nullable: false),
                     jwt_id = table.Column<string>(type: "text", nullable: false),
                     user_id = table.Column<Guid>(type: "uuid", nullable: false),
                     expires_at_utc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
@@ -57,11 +61,41 @@ namespace SampleProject.DataAccess.Migrations
                         onDelete: ReferentialAction.Cascade);
                 });
 
+            migrationBuilder.CreateTable(
+                name: "user_api_keys",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    user_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    secret_hash = table.Column<string>(type: "text", nullable: false),
+                    is_active = table.Column<bool>(type: "boolean", nullable: false),
+                    revoked_at_utc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    created_at_utc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    updated_at_utc = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    created_by = table.Column<string>(type: "text", nullable: true),
+                    updated_by = table.Column<string>(type: "text", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_user_api_keys", x => x.id);
+                    table.ForeignKey(
+                        name: "fk_user_api_keys_users_user_id",
+                        column: x => x.user_id,
+                        principalTable: "users",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
             migrationBuilder.CreateIndex(
-                name: "ix_refresh_tokens_jwt_id",
+                name: "ix_refresh_tokens_access_token_hash_refresh_token_hash",
                 table: "refresh_tokens",
-                column: "jwt_id",
-                unique: true);
+                columns: new[] { "access_token_hash", "refresh_token_hash" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_refresh_tokens_access_token_hash_refresh_token_hash_is_acti",
+                table: "refresh_tokens",
+                columns: new[] { "access_token_hash", "refresh_token_hash", "is_active" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_refresh_tokens_refresh_token_hash",
@@ -75,10 +109,16 @@ namespace SampleProject.DataAccess.Migrations
                 column: "user_id");
 
             migrationBuilder.CreateIndex(
+                name: "ix_user_api_keys_user_id",
+                table: "user_api_keys",
+                column: "user_id");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_users_username",
                 table: "users",
                 column: "username",
-                unique: true);
+                unique: true,
+                filter: "is_deleted = false");
         }
 
         /// <inheritdoc />
@@ -86,6 +126,9 @@ namespace SampleProject.DataAccess.Migrations
         {
             migrationBuilder.DropTable(
                 name: "refresh_tokens");
+
+            migrationBuilder.DropTable(
+                name: "user_api_keys");
 
             migrationBuilder.DropTable(
                 name: "users");
