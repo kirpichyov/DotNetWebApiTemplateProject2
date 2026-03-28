@@ -1,8 +1,5 @@
-using FluentAssertions;
 using SampleProject.Application.Models.Auth;
 using SampleProject.Application.Models.Users;
-using SampleProject.IntegrationTests.Endpoints;
-using SampleProject.IntegrationTests.Extensions;
 using SampleProject.IntegrationTests.Fixture;
 using System.Net;
 
@@ -30,7 +27,7 @@ public sealed class AuthTests : IClassFixture<SystemUnderTestFixture>
             }),
             TestContext.Current.CancellationToken);
 
-        response.Should().HaveStatusCode(HttpStatusCode.BadRequest);
+        response.ShouldHaveStatusCode(HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -46,7 +43,7 @@ public sealed class AuthTests : IClassFixture<SystemUnderTestFixture>
             }),
             TestContext.Current.CancellationToken);
 
-        response.Should().HaveStatusCode(HttpStatusCode.BadRequest);
+        response.ShouldHaveStatusCode(HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -57,7 +54,7 @@ public sealed class AuthTests : IClassFixture<SystemUnderTestFixture>
             _sut.Endpoints.AuthMe(),
             TestContext.Current.CancellationToken);
 
-        response.Should().HaveStatusCode(HttpStatusCode.Unauthorized);
+        response.ShouldHaveStatusCode(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -68,11 +65,11 @@ public sealed class AuthTests : IClassFixture<SystemUnderTestFixture>
             _sut.Endpoints.AuthMe(),
             TestContext.Current.CancellationToken);
 
-        response.Should().HaveStatusCode(HttpStatusCode.OK);
+        response.ShouldHaveStatusCode(HttpStatusCode.OK);
         var data = response.DeserializeData<CurrentUserDataResponse>();
-        data.Should().NotBeNull();
-        data!.Id.Should().Be(ctx.User.Id);
-        data.Username.Should().Be(ctx.User.Username);
+        data.ShouldNotBeNull();
+        data!.Id.ShouldBe(ctx.User.Id);
+        data.Username.ShouldBe(ctx.User.Username);
     }
 
     [Fact]
@@ -90,8 +87,8 @@ public sealed class AuthTests : IClassFixture<SystemUnderTestFixture>
 
         authResponse.ThrowOnFailStatusCode();
         var auth = authResponse.DeserializeData<JwtAuthResponse>();
-        auth.Should().NotBeNull();
-        auth!.RefreshToken.Should().NotBeNull();
+        auth.ShouldNotBeNull();
+        auth!.RefreshToken.ShouldNotBeNull();
 
         var refreshResponse = await client.ExecuteAsync(
             _sut.Endpoints.AuthRefresh(new RefreshAccessTokenRequest
@@ -101,11 +98,11 @@ public sealed class AuthTests : IClassFixture<SystemUnderTestFixture>
             }),
             TestContext.Current.CancellationToken);
 
-        refreshResponse.Should().HaveStatusCode(HttpStatusCode.OK);
+        refreshResponse.ShouldHaveStatusCode(HttpStatusCode.OK);
         var refreshed = refreshResponse.DeserializeData<JwtAuthResponse>();
-        refreshed.Should().NotBeNull();
-        refreshed!.AccessToken.Token.Should().NotBeNullOrEmpty();
-        refreshed.AccessToken.Token.Should().NotBe(auth.AccessToken.Token);
+        refreshed.ShouldNotBeNull();
+        refreshed!.AccessToken.Token.ShouldNotBeNullOrEmpty();
+        refreshed.AccessToken.Token.ShouldNotBe(auth.AccessToken.Token);
     }
 
     [Fact]
@@ -123,7 +120,7 @@ public sealed class AuthTests : IClassFixture<SystemUnderTestFixture>
 
         authResponse.ThrowOnFailStatusCode();
         var auth = authResponse.DeserializeData<JwtAuthResponse>();
-        auth.Should().NotBeNull();
+        auth.ShouldNotBeNull();
 
         var refreshedResponse = await client.ExecuteAsync(
             _sut.Endpoints.AuthRefresh(new RefreshAccessTokenRequest
@@ -143,7 +140,7 @@ public sealed class AuthTests : IClassFixture<SystemUnderTestFixture>
             }),
             TestContext.Current.CancellationToken);
 
-        secondWithOldPair.Should().HaveStatusCode(HttpStatusCode.BadRequest);
+        secondWithOldPair.ShouldHaveStatusCode(HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -177,7 +174,7 @@ public sealed class AuthTests : IClassFixture<SystemUnderTestFixture>
 
         signedInResponse.ThrowOnFailStatusCode();
         var signedIn = signedInResponse.DeserializeData<JwtAuthResponse>();
-        signedIn.Should().NotBeNull();
+        signedIn.ShouldNotBeNull();
 
         var authenticated = _sut.BuildRestClient(signedIn!.AccessToken.Token);
         var changeResponse = await authenticated.ExecuteAsync(
@@ -189,7 +186,7 @@ public sealed class AuthTests : IClassFixture<SystemUnderTestFixture>
             }),
             TestContext.Current.CancellationToken);
 
-        changeResponse.Should().HaveStatusCode(HttpStatusCode.NoContent);
+        changeResponse.ShouldHaveStatusCode(HttpStatusCode.NoContent);
 
         var oldPasswordSignIn = await anonymous.ExecuteAsync(
             _sut.Endpoints.AuthSignIn(new SignInRequest
@@ -200,7 +197,7 @@ public sealed class AuthTests : IClassFixture<SystemUnderTestFixture>
             }),
             TestContext.Current.CancellationToken);
 
-        oldPasswordSignIn.Should().HaveStatusCode(HttpStatusCode.BadRequest);
+        oldPasswordSignIn.ShouldHaveStatusCode(HttpStatusCode.BadRequest);
 
         var newPasswordSignIn = await anonymous.ExecuteAsync(
             _sut.Endpoints.AuthSignIn(new SignInRequest
@@ -211,7 +208,7 @@ public sealed class AuthTests : IClassFixture<SystemUnderTestFixture>
             }),
             TestContext.Current.CancellationToken);
 
-        newPasswordSignIn.Should().HaveStatusCode(HttpStatusCode.OK);
+        newPasswordSignIn.ShouldHaveStatusCode(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -229,7 +226,7 @@ public sealed class AuthTests : IClassFixture<SystemUnderTestFixture>
 
         authResponse.ThrowOnFailStatusCode();
         var auth = authResponse.DeserializeData<JwtAuthResponse>();
-        auth.Should().NotBeNull();
+        auth.ShouldNotBeNull();
 
         var jwtClient = _sut.BuildRestClient(auth!.AccessToken.Token);
         var deactivateResponse = await jwtClient.ExecuteAsync(
@@ -240,7 +237,7 @@ public sealed class AuthTests : IClassFixture<SystemUnderTestFixture>
             }),
             TestContext.Current.CancellationToken);
 
-        deactivateResponse.Should().HaveStatusCode(HttpStatusCode.NoContent);
+        deactivateResponse.ShouldHaveStatusCode(HttpStatusCode.NoContent);
 
         var refreshAfter = await anonymous.ExecuteAsync(
             _sut.Endpoints.AuthRefresh(new RefreshAccessTokenRequest
@@ -250,6 +247,6 @@ public sealed class AuthTests : IClassFixture<SystemUnderTestFixture>
             }),
             TestContext.Current.CancellationToken);
 
-        refreshAfter.Should().HaveStatusCode(HttpStatusCode.BadRequest);
+        refreshAfter.ShouldHaveStatusCode(HttpStatusCode.BadRequest);
     }
 }

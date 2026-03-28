@@ -23,6 +23,6 @@
 **/LICENSE
 **/README.md
 **/appsettings.Development.json
-**/RavenFinance.Tests.Common
-**/RavenFinance.IntegrationTests
-**/RavenFinance.Testing.DataGeneration
+**/*.Tests.Common
+**/*.IntegrationTests
+**/*.Testing.DataGeneration

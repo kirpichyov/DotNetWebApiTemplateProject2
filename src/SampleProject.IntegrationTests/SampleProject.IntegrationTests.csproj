@@ -11,18 +11,18 @@
 
     <ItemGroup>
         <PackageReference Include="Bogus" Version="35.6.5" />
-        <PackageReference Include="coverlet.collector" Version="8.0.0">
+        <PackageReference Include="coverlet.collector" Version="8.0.1">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="FluentAssertions" Version="8.8.0" />
-        <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.3" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
+        <PackageReference Include="Shouldly" Version="4.3.0" />
+        <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.5" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.5" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
         <PackageReference Include="RestSharp" Version="114.0.0" />
-        <PackageReference Include="WireMock.Net" Version="1.25.0" />
-        <PackageReference Include="Testcontainers" Version="4.10.0" />
-        <PackageReference Include="Testcontainers.PostgreSql" Version="4.10.0" />
+        <PackageReference Include="WireMock.Net" Version="2.0.0" />
+        <PackageReference Include="Testcontainers" Version="4.11.0" />
+        <PackageReference Include="Testcontainers.PostgreSql" Version="4.11.0" />
         <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -32,6 +32,7 @@
 
     <ItemGroup>
         <Using Include="Xunit" />
+        <Using Include="Shouldly" />
         <Using Include="SampleProject.IntegrationTests.Extensions" />
     </ItemGroup>
 

@@ -1,4 +1,3 @@
-using FluentAssertions;
 using SampleProject.Application.Models.ApiKeys;
 using SampleProject.Application.Models.Auth;
 using SampleProject.IntegrationTests.Fixture;
@@ -44,16 +43,17 @@ public sealed class UserApiKeysTests : IClassFixture<SystemUnderTestFixture>
 
         signIn.ThrowOnFailStatusCode();
         var auth = signIn.DeserializeData<JwtAuthResponse>();
-        auth.Should().NotBeNull();
+        auth.ShouldNotBeNull();
 
         var client = _sut.BuildRestClient(auth!.AccessToken.Token);
         var response = await client.ExecuteAsync(
             _sut.Endpoints.UserApiKeysList(),
             TestContext.Current.CancellationToken);
 
-        response.Should().HaveStatusCode(HttpStatusCode.OK);
+        response.ShouldHaveStatusCode(HttpStatusCode.OK);
         var data = response.DeserializeData<List<UserApiKeyResponse>>();
-        data.Should().NotBeNull().And.BeEmpty();
+        data.ShouldNotBeNull();
+        data!.ShouldBeEmpty();
     }
 
     [Fact]
@@ -65,11 +65,11 @@ public sealed class UserApiKeysTests : IClassFixture<SystemUnderTestFixture>
             _sut.Endpoints.UserApiKeysCreate(new CreateUserApiKeyRequest { Name = "integration-key" }),
             TestContext.Current.CancellationToken);
 
-        createResponse.Should().HaveStatusCode(HttpStatusCode.Created);
+        createResponse.ShouldHaveStatusCode(HttpStatusCode.Created);
         var created = createResponse.DeserializeData<CreateUserApiKeyResponse>();
-        created.Should().NotBeNull();
-        created!.FullKey.Should().NotBeNullOrWhiteSpace();
-        created.Key.Name.Should().Be("integration-key");
+        created.ShouldNotBeNull();
+        created!.FullKey.ShouldNotBeNullOrWhiteSpace();
+        created.Key.Name.ShouldBe("integration-key");
 
         var keyId = created.Key.Id;
 
@@ -77,52 +77,52 @@ public sealed class UserApiKeysTests : IClassFixture<SystemUnderTestFixture>
             _sut.Endpoints.UserApiKeysGet(keyId),
             TestContext.Current.CancellationToken);
 
-        getResponse.Should().HaveStatusCode(HttpStatusCode.OK);
+        getResponse.ShouldHaveStatusCode(HttpStatusCode.OK);
         var got = getResponse.DeserializeData<UserApiKeyResponse>();
-        got!.Id.Should().Be(keyId);
+        got!.Id.ShouldBe(keyId);
 
         var listResponse = await ctx.RestClient.ExecuteAsync(
             _sut.Endpoints.UserApiKeysList(),
             TestContext.Current.CancellationToken);
 
-        listResponse.Should().HaveStatusCode(HttpStatusCode.OK);
+        listResponse.ShouldHaveStatusCode(HttpStatusCode.OK);
         var list = listResponse.DeserializeData<List<UserApiKeyResponse>>();
-        list.Should().Contain(k => k.Id == keyId);
+        list.ShouldContain(k => k.Id == keyId);
 
         var updateResponse = await ctx.RestClient.ExecuteAsync(
             _sut.Endpoints.UserApiKeysUpdate(keyId, new UpdateUserApiKeyRequest { Name = "renamed" }),
             TestContext.Current.CancellationToken);
 
-        updateResponse.Should().HaveStatusCode(HttpStatusCode.OK);
+        updateResponse.ShouldHaveStatusCode(HttpStatusCode.OK);
         var updated = updateResponse.DeserializeData<UserApiKeyResponse>();
-        updated!.Name.Should().Be("renamed");
+        updated!.Name.ShouldBe("renamed");
 
         var rotateResponse = await ctx.RestClient.ExecuteAsync(
             _sut.Endpoints.UserApiKeysRotate(keyId),
             TestContext.Current.CancellationToken);
 
-        rotateResponse.Should().HaveStatusCode(HttpStatusCode.OK);
+        rotateResponse.ShouldHaveStatusCode(HttpStatusCode.OK);
         var rotated = rotateResponse.DeserializeData<CreateUserApiKeyResponse>();
-        rotated!.FullKey.Should().NotBeNullOrWhiteSpace();
-        rotated.FullKey.Should().NotBe(created.FullKey);
+        rotated!.FullKey.ShouldNotBeNullOrWhiteSpace();
+        rotated.FullKey.ShouldNotBe(created.FullKey);
 
         var revokeResponse = await ctx.RestClient.ExecuteAsync(
             _sut.Endpoints.UserApiKeysRevoke(keyId),
             TestContext.Current.CancellationToken);
 
-        revokeResponse.Should().HaveStatusCode(HttpStatusCode.NoContent);
+        revokeResponse.ShouldHaveStatusCode(HttpStatusCode.NoContent);
 
         // Backend soft-revokes: row remains; GET returns 200 with isActive false (see UserApiKeysService.GetByIdAsync).
         var getAfterRevoke = await ctx.RestClient.ExecuteAsync(
             _sut.Endpoints.UserApiKeysGet(keyId),
             TestContext.Current.CancellationToken);
 
-        getAfterRevoke.Should().HaveStatusCode(HttpStatusCode.OK);
+        getAfterRevoke.ShouldHaveStatusCode(HttpStatusCode.OK);
         var revoked = getAfterRevoke.DeserializeData<UserApiKeyResponse>();
-        revoked.Should().NotBeNull();
-        revoked!.Id.Should().Be(keyId);
-        revoked.IsActive.Should().BeFalse();
-        revoked.RevokedAtUtc.Should().NotBeNull();
+        revoked.ShouldNotBeNull();
+        revoked!.Id.ShouldBe(keyId);
+        revoked.IsActive.ShouldBeFalse();
+        revoked.RevokedAtUtc.ShouldNotBeNull();
     }
 
     [Fact]
@@ -135,14 +135,14 @@ public sealed class UserApiKeysTests : IClassFixture<SystemUnderTestFixture>
 
         createFirstResponse.ThrowOnFailStatusCode();
         var createFirst = createFirstResponse.DeserializeData<CreateUserApiKeyResponse>();
-        createFirst.Should().NotBeNull();
+        createFirst.ShouldNotBeNull();
 
         var apiKeyClient = _sut.BuildRestClientForApiKey(createFirst!.FullKey);
         var response = await apiKeyClient.ExecuteAsync(
             _sut.Endpoints.UserApiKeysCreate(new CreateUserApiKeyRequest { Name = "should-fail" }),
             TestContext.Current.CancellationToken);
 
-        response.Should().HaveStatusCode(HttpStatusCode.Unauthorized);
+        response.ShouldHaveStatusCode(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -155,7 +155,7 @@ public sealed class UserApiKeysTests : IClassFixture<SystemUnderTestFixture>
 
         createResponse.ThrowOnFailStatusCode();
         var created = createResponse.DeserializeData<CreateUserApiKeyResponse>();
-        created.Should().NotBeNull();
+        created.ShouldNotBeNull();
         var keyId = created!.Key.Id;
 
         var faker = new Bogus.Faker();
@@ -185,13 +185,13 @@ public sealed class UserApiKeysTests : IClassFixture<SystemUnderTestFixture>
 
         otherSignInResponse.ThrowOnFailStatusCode();
         var otherAuth = otherSignInResponse.DeserializeData<JwtAuthResponse>();
-        otherAuth.Should().NotBeNull();
+        otherAuth.ShouldNotBeNull();
 
         var otherClient = _sut.BuildRestClient(otherAuth!.AccessToken.Token);
         var response = await otherClient.ExecuteAsync(
             _sut.Endpoints.UserApiKeysGet(keyId),
             TestContext.Current.CancellationToken);
 
-        response.Should().HaveStatusCode(HttpStatusCode.NotFound);
+        response.ShouldHaveStatusCode(HttpStatusCode.NotFound);
     }
 }

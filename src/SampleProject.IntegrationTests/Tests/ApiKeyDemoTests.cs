@@ -1,8 +1,6 @@
-using FluentAssertions;
 using SampleProject.Application.Models.ApiKeys;
 using SampleProject.Application.Models.Users;
 using SampleProject.IntegrationTests.Endpoints;
-using SampleProject.IntegrationTests.Extensions;
 using SampleProject.IntegrationTests.Fixture;
 using RestSharp;
 using System.Net;
@@ -26,7 +24,7 @@ public sealed class ApiKeyDemoTests : IClassFixture<SystemUnderTestFixture>
             _sut.Endpoints.ApiKeyDemoMe(),
             TestContext.Current.CancellationToken);
 
-        response.Should().HaveStatusCode(HttpStatusCode.Unauthorized);
+        response.ShouldHaveStatusCode(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -37,7 +35,7 @@ public sealed class ApiKeyDemoTests : IClassFixture<SystemUnderTestFixture>
             _sut.Endpoints.ApiKeyDemoMe(),
             TestContext.Current.CancellationToken);
 
-        response.Should().HaveStatusCode(HttpStatusCode.Unauthorized);
+        response.ShouldHaveStatusCode(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
@@ -50,17 +48,17 @@ public sealed class ApiKeyDemoTests : IClassFixture<SystemUnderTestFixture>
 
         createResponse.ThrowOnFailStatusCode();
         var created = createResponse.DeserializeData<CreateUserApiKeyResponse>();
-        created.Should().NotBeNull();
+        created.ShouldNotBeNull();
 
         var apiKeyClient = _sut.BuildRestClientForApiKey(created!.FullKey);
         var demoResponse = await apiKeyClient.ExecuteAsync(
             _sut.Endpoints.ApiKeyDemoMe(),
             TestContext.Current.CancellationToken);
 
-        demoResponse.Should().HaveStatusCode(HttpStatusCode.OK);
+        demoResponse.ShouldHaveStatusCode(HttpStatusCode.OK);
         var demoUser = demoResponse.DeserializeData<CurrentUserDataResponse>();
-        demoUser!.Id.Should().Be(ctx.User.Id);
-        demoUser.Username.Should().Be(ctx.User.Username);
+        demoUser!.Id.ShouldBe(ctx.User.Id);
+        demoUser.Username.ShouldBe(ctx.User.Username);
 
         var jwtMeResponse = await ctx.RestClient.ExecuteAsync(
             _sut.Endpoints.AuthMe(),
@@ -68,7 +66,7 @@ public sealed class ApiKeyDemoTests : IClassFixture<SystemUnderTestFixture>
 
         jwtMeResponse.ThrowOnFailStatusCode();
         var jwtUser = jwtMeResponse.DeserializeData<CurrentUserDataResponse>();
-        jwtUser!.Id.Should().Be(demoUser.Id);
+        jwtUser!.Id.ShouldBe(demoUser.Id);
     }
 
     [Fact]
@@ -81,7 +79,7 @@ public sealed class ApiKeyDemoTests : IClassFixture<SystemUnderTestFixture>
 
         createResponse.ThrowOnFailStatusCode();
         var created = createResponse.DeserializeData<CreateUserApiKeyResponse>();
-        created.Should().NotBeNull();
+        created.ShouldNotBeNull();
 
         var fullKey = Uri.EscapeDataString(created!.FullKey);
         var request = new RestRequest($"{EndpointPaths.ApiKeyDemoMe}?apiKey={fullKey}", Method.Get);
@@ -90,8 +88,8 @@ public sealed class ApiKeyDemoTests : IClassFixture<SystemUnderTestFixture>
             request,
             TestContext.Current.CancellationToken);
 
-        response.Should().HaveStatusCode(HttpStatusCode.OK);
+        response.ShouldHaveStatusCode(HttpStatusCode.OK);
         var user = response.DeserializeData<CurrentUserDataResponse>();
-        user!.Id.Should().Be(ctx.User.Id);
+        user!.Id.ShouldBe(ctx.User.Id);
     }
 }
