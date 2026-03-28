@@ -1,0 +1,6 @@
+{
+  "ConnectionStrings": {
+    "RealDb": "Server=localhost;Port=5432;Database=SampleProjectIntTests;User Id=postgres;Password=postgres;"
+  },
+  "DbMode": "TestContainers"
+}

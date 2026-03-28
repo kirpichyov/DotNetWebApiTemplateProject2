@@ -7,14 +7,19 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    </ItemGroup>
+
+    <ItemGroup>
       <ProjectReference Include="..\SampleProject.Core\SampleProject.Core.csproj" />
       <ProjectReference Include="..\SampleProject.DataAccess\SampleProject.DataAccess.csproj" />
       <ProjectReference Include="..\SampleProject.Infrastructure\SampleProject.Infrastructure.csproj" />
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
-      <PackageReference Include="Riok.Mapperly" Version="4.3.0" />
+      <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
+      <PackageReference Include="Riok.Mapperly" Version="4.3.1" />
+      <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.17.0" />
     </ItemGroup>
 
 </Project>

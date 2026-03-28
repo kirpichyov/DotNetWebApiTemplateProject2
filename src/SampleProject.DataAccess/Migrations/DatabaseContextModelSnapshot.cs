@@ -17,7 +17,7 @@ namespace SampleProject.DataAccess.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.0")
+                .HasAnnotation("ProductVersion", "10.0.5")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -28,6 +28,11 @@ namespace SampleProject.DataAccess.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<string>("AccessTokenHash")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("access_token_hash");
 
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone")
@@ -75,16 +80,18 @@ namespace SampleProject.DataAccess.Migrations
                     b.HasKey("Id")
                         .HasName("pk_refresh_tokens");
 
-                    b.HasIndex("JwtId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_refresh_tokens_jwt_id");
-
                     b.HasIndex("RefreshTokenHash")
                         .IsUnique()
                         .HasDatabaseName("ix_refresh_tokens_refresh_token_hash");
 
                     b.HasIndex("UserId")
                         .HasDatabaseName("ix_refresh_tokens_user_id");
+
+                    b.HasIndex("AccessTokenHash", "RefreshTokenHash")
+                        .HasDatabaseName("ix_refresh_tokens_access_token_hash_refresh_token_hash");
+
+                    b.HasIndex("AccessTokenHash", "RefreshTokenHash", "IsActive")
+                        .HasDatabaseName("ix_refresh_tokens_access_token_hash_refresh_token_hash_is_acti");
 
                     b.ToTable("refresh_tokens", (string)null);
                 });
@@ -104,10 +111,22 @@ namespace SampleProject.DataAccess.Migrations
                         .HasColumnType("text")
                         .HasColumnName("created_by");
 
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at_utc");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("deleted_by");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("full_name");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()
@@ -137,9 +156,65 @@ namespace SampleProject.DataAccess.Migrations
 
                     b.HasIndex("Username")
                         .IsUnique()
-                        .HasDatabaseName("ix_users_username");
+                        .HasDatabaseName("ix_users_username")
+                        .HasFilter("is_deleted = false");
 
                     b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("SampleProject.Core.Models.Entities.UserApiKey", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at_utc");
+
+                    b.Property<string>("SecretHash")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("secret_hash");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("updated_by");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_user_api_keys");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_user_api_keys_user_id");
+
+                    b.ToTable("user_api_keys", (string)null);
                 });
 
             modelBuilder.Entity("SampleProject.Core.Models.Entities.RefreshToken", b =>
@@ -150,6 +225,18 @@ namespace SampleProject.DataAccess.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_refresh_tokens_users_user_id");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SampleProject.Core.Models.Entities.UserApiKey", b =>
+                {
+                    b.HasOne("SampleProject.Core.Models.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_api_keys_users_user_id");
 
                     b.Navigation("User");
                 });

@@ -1,9 +1,11 @@
-﻿using System.Net;
+using System.Net;
 using System.Text.Json.Nodes;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi;
 using SampleProject.Api.Constants;
+using SampleProject.Application.Constants;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace SampleProject.Api.Configuration.Swagger;
@@ -20,34 +22,54 @@ internal sealed class AuthOperationFilter : IOperationFilter
 			.OfType<AllowAnonymousAttribute>()
 			.Any();
 
-		var hasAuthorizeAttribute = attributes
+		var authorizeAttributes = attributes
 			.OfType<AuthorizeAttribute>()
-			.Any();
+			.ToList();
 
-		var apiExplorerAttribute = attributes
-			.OfType<ApiExplorerSettingsAttribute>()
-			.FirstOrDefault();
-		
-		if (allowAnonymous || !hasAuthorizeAttribute)
+		if (allowAnonymous || authorizeAttributes.Count == 0)
 		{
 			return;
 		}
-		
-		var id = apiExplorerAttribute?.GroupName switch
-		{
-			EndpointConstants.DefaultGroupName => "Bearer",
-			_ => "Bearer"
-		};
-		
-		var securityRequirement = new OpenApiSecurityRequirement
-		{
-			{
-				new OpenApiSecuritySchemeReference(id, context.Document),
-				new List<string>()
-			}
-		};
 
-		operation.Security = new[] { securityRequirement };
+		var schemeSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		foreach (var attr in authorizeAttributes)
+		{
+			if (string.IsNullOrWhiteSpace(attr.AuthenticationSchemes))
+			{
+				continue;
+			}
+
+			foreach (var part in attr.AuthenticationSchemes.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+			{
+				schemeSet.Add(part);
+			}
+		}
+
+		List<OpenApiSecurityRequirement> securityRequirements;
+		if (schemeSet.Count > 0 &&
+		    schemeSet.Contains(AuthConstants.ApiKey.Scheme) &&
+		    !schemeSet.Contains(JwtBearerDefaults.AuthenticationScheme))
+		{
+			securityRequirements =
+			[
+				new OpenApiSecurityRequirement
+				{
+					{ new OpenApiSecuritySchemeReference(AuthConstants.ApiKey.Scheme, context.Document), new List<string>() }
+				}
+			];
+		}
+		else
+		{
+			securityRequirements =
+			[
+				new OpenApiSecurityRequirement
+				{
+					{ new OpenApiSecuritySchemeReference("Bearer", context.Document), new List<string>() }
+				}
+			];
+		}
+
+		operation.Security = securityRequirements;
 
 		operation.Responses?.TryAdd(
 			((int)HttpStatusCode.Unauthorized).ToString(),
